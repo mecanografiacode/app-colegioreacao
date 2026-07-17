@@ -1,6 +1,6 @@
 {
-  "name": "Colégio Reação - Gestão Escolar",
-  "short_name": "Reação Gestão",
+  "name": "Sistema Colegio Reação",
+  "short_name": "Colegio Reação",
   "description": "Sistema de Gestão de Ordens de Serviço, Equipamentos e Suporte do Colégio Reação",
   "start_url": "/",
   "display": "standalone",
@@ -9,12 +9,12 @@
   "orientation": "any",
   "icons": [
     {
-      "src": "https://img.icons8.com/color/192/000000/school.png",
+      "src": "https://i.imgur.com/8RP9DL7.png",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "https://img.icons8.com/color/512/000000/school.png",
+      "src": "https://i.imgur.com/8RP9DL7.png",
       "sizes": "512x512",
       "type": "image/png"
     }
