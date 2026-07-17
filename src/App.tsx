@@ -39,6 +39,7 @@ import {
 
 import OfflineQueueService from './services/OfflineQueueService';
 import IndexedDBService from './services/IndexedDBService';
+import FirebaseService from './services/FirebaseService';
 
 import Sidebar from './components/Sidebar';
 import OSDashboard from './components/OSDashboard';
@@ -140,6 +141,40 @@ export default function App() {
       try {
         const isFirebaseActive = FirebaseService.isConfigured();
 
+        // Sync school branding configuration first
+        if (isFirebaseActive) {
+          try {
+            const configDoc = await FirebaseService.settings.get('school_config');
+            if (configDoc) {
+              // Remote settings exist, update local
+              localStorage.setItem('colegio_reacao_school_name', configDoc.name || 'Colégio Reação');
+              localStorage.setItem('colegio_reacao_school_email', configDoc.email || 'mecanografia@colegioreacaodf.com');
+              localStorage.setItem('colegio_reacao_school_address', configDoc.address || 'QNJ, Taguatinga - DF');
+              localStorage.setItem('colegio_reacao_school_phone', configDoc.phone || '(61) 90000-0000');
+              setSchoolName(configDoc.name || 'Colégio Reação');
+              window.dispatchEvent(new Event('storage'));
+              console.log('[Remote Sync] School configuration synchronized from Firestore.');
+            } else {
+              // Remote settings don't exist, upload local if any
+              const localName = localStorage.getItem('colegio_reacao_school_name') || 'Colégio Reação';
+              const localEmail = localStorage.getItem('colegio_reacao_school_email') || 'mecanografia@colegioreacaodf.com';
+              const localAddress = localStorage.getItem('colegio_reacao_school_address') || 'QNJ, Taguatinga - DF';
+              const localPhone = localStorage.getItem('colegio_reacao_school_phone') || '(61) 90000-0000';
+              
+              await FirebaseService.settings.create({
+                id: 'school_config',
+                name: localName,
+                email: localEmail,
+                address: localAddress,
+                phone: localPhone
+              }, 'school_config');
+              console.log('[Remote Sync] Local school configuration uploaded to Firestore.');
+            }
+          } catch (configErr) {
+            console.warn('[Remote Sync] Error synchronizing school configuration:', configErr);
+          }
+        }
+
         async function syncCollection<T>(key: string, currentLocal: T[], setter: (data: T[]) => void) {
           // If Firebase is active, prioritize remote data
           if (isFirebaseActive) {
@@ -150,9 +185,20 @@ export default function App() {
                 localStorage.setItem(dbPrefix + key, JSON.stringify(remoteData));
                 console.log(`[Remote Sync] Loaded ${key} from Firestore successfully.`);
                 return;
+              } else if (currentLocal && currentLocal.length > 0) {
+                console.log(`[Remote Sync] Firestore collection "${key}" is empty. Uploading local data...`);
+                // Upload local elements to seed remote database
+                for (const item of currentLocal) {
+                  try {
+                    await (FirebaseService as any)[key].create(item, (item as any).id);
+                  } catch (err) {
+                    console.error(`[Remote Sync] Failed uploading item in ${key}:`, err);
+                  }
+                }
+                console.log(`[Remote Sync] Seeded "${key}" Firestore collection successfully.`);
               }
             } catch (err) {
-              console.warn(`[Remote Sync] Failed to load ${key} from Firestore:`, err);
+              console.warn(`[Remote Sync] Failed to sync ${key} with Firestore:`, err);
             }
           }
 
@@ -196,6 +242,66 @@ export default function App() {
 
     return () => {
       unsubscribeOnline();
+    };
+  }, []);
+
+  // Real-time remote subscriptions
+  useEffect(() => {
+    const isFirebaseActive = FirebaseService.isConfigured();
+    if (!isFirebaseActive) return;
+
+    console.log('[Firebase Subscriptions] Initializing real-time synchronization...');
+    
+    const dbPrefix = 'colegio_reacao_';
+    
+    const unsubscribes = [
+      FirebaseService.users.subscribe((data) => {
+        if (data && data.length > 0) {
+          setUsers(data);
+          localStorage.setItem(dbPrefix + 'users', JSON.stringify(data));
+        }
+      }),
+      FirebaseService.ordens.subscribe((data) => {
+        if (data) {
+          setOrdens(data);
+          localStorage.setItem(dbPrefix + 'ordens', JSON.stringify(data));
+        }
+      }),
+      FirebaseService.equipamentos.subscribe((data) => {
+        if (data) {
+          setEquipamentos(data);
+          localStorage.setItem(dbPrefix + 'equipamentos', JSON.stringify(data));
+        }
+      }),
+      FirebaseService.suporte.subscribe((data) => {
+        if (data) {
+          setChamados(data);
+          localStorage.setItem(dbPrefix + 'suporte', JSON.stringify(data));
+        }
+      }),
+      FirebaseService.funcionarios.subscribe((data) => {
+        if (data) {
+          setFuncionarios(data);
+          localStorage.setItem(dbPrefix + 'funcionarios', JSON.stringify(data));
+        }
+      }),
+      FirebaseService.auditoria.subscribe((data) => {
+        if (data) {
+          setLogs(data);
+          localStorage.setItem(dbPrefix + 'auditoria', JSON.stringify(data));
+        }
+      }),
+      FirebaseService.emprestimos.subscribe((data) => {
+        if (data) {
+          setEmprestimos(data);
+          localStorage.setItem(dbPrefix + 'emprestimos', JSON.stringify(data));
+        }
+      })
+    ];
+
+    return () => {
+      console.log('[Firebase Subscriptions] Dismounting real-time listeners.');
+      unsubscribes.forEach(unsub => unsub());
     };
   }, []);
 

@@ -225,7 +225,21 @@ export const INITIAL_USERS: User[] = [
 
 // Initialize system DB in localStorage if empty and export getters/setters
 export function initializeDB() {
-  if (!localStorage.getItem(LS_PREFIX + 'users')) {
+  // Safe validation for users: if missing, empty or invalid, re-populate default Super Admin
+  const usersRaw = localStorage.getItem(LS_PREFIX + 'users');
+  let hasUsers = false;
+  if (usersRaw) {
+    try {
+      const parsed = JSON.parse(usersRaw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        hasUsers = true;
+      }
+    } catch (e) {
+      console.warn('[DB Init] Corrupted users data in localStorage, re-seeding.', e);
+    }
+  }
+
+  if (!hasUsers) {
     setLocalStorageData('users', INITIAL_USERS);
   }
   if (!localStorage.getItem(LS_PREFIX + 'ordens')) {

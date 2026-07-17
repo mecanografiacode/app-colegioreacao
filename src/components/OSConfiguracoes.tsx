@@ -6,6 +6,7 @@
 import React, { useState } from 'react';
 import { Settings, Shield, School, User, Lock, Save, Sparkles, Key } from 'lucide-react';
 import { UserSession } from '../types';
+import FirebaseService from '../services/FirebaseService';
 
 interface OSConfiguracoesProps {
   user: UserSession;
@@ -40,15 +41,31 @@ export default function OSConfiguracoes({
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
-  const handleSchoolSubmit = (e: React.FormEvent) => {
+  const handleSchoolSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     localStorage.setItem('colegio_reacao_school_name', schoolName);
     localStorage.setItem('colegio_reacao_school_email', email);
     localStorage.setItem('colegio_reacao_school_address', address);
     localStorage.setItem('colegio_reacao_school_phone', phone);
     
-    // Trigger storage event so other components (e.g. headers or sidebar if needed) can update if they listen to it
+    // Trigger storage event so other components can update
     window.dispatchEvent(new Event('storage'));
+    
+    // Save to Firebase as well if configured
+    if (FirebaseService.isConfigured()) {
+      try {
+        await FirebaseService.settings.create({
+          id: 'school_config',
+          name: schoolName,
+          email: email,
+          address: address,
+          phone: phone
+        }, 'school_config');
+        console.log('[Firebase] School configuration saved successfully to Firestore.');
+      } catch (err) {
+        console.error('[Firebase] Failed to save school config to Firestore:', err);
+      }
+    }
     
     alert('Configurações da instituição salvas com sucesso!');
   };

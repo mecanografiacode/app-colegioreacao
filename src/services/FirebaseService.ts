@@ -85,19 +85,51 @@ let app: FirebaseApp | null = null;
 let db: Firestore | null = null;
 let auth: Auth | null = null;
 
+// Helper to get configuration from file or environment variables (highly useful for production/Vercel deployments)
+const getFirebaseConfig = () => {
+  const metaEnv = (import.meta as any).env || {};
+  const envConfig = {
+    apiKey: metaEnv.VITE_FIREBASE_API_KEY || "",
+    authDomain: metaEnv.VITE_FIREBASE_AUTH_DOMAIN || "",
+    projectId: metaEnv.VITE_FIREBASE_PROJECT_ID || "",
+    storageBucket: metaEnv.VITE_FIREBASE_STORAGE_BUCKET || "",
+    messagingSenderId: metaEnv.VITE_FIREBASE_MESSAGING_SENDER_ID || "",
+    appId: metaEnv.VITE_FIREBASE_APP_ID || "",
+    measurementId: metaEnv.VITE_FIREBASE_MEASUREMENT_ID || "",
+    firestoreDatabaseId: metaEnv.VITE_FIREBASE_DATABASE_ID || "(default)"
+  };
+
+  const hasEnvConfig = envConfig.apiKey && envConfig.apiKey.trim() !== '';
+
+  if (hasEnvConfig) {
+    console.log("[Firebase] Using configuration from environment variables (Vercel/Production).");
+    return envConfig;
+  }
+
+  // Fallback to the json config file
+  return firebaseConfig;
+};
+
+const finalConfig = getFirebaseConfig();
+
 // Determine if config is validly populated
-const hasConfig = firebaseConfig && firebaseConfig.apiKey && firebaseConfig.apiKey.trim() !== '';
+const hasConfig = !!(
+  finalConfig &&
+  finalConfig.apiKey && finalConfig.apiKey.trim() !== '' &&
+  finalConfig.projectId && finalConfig.projectId.trim() !== '' &&
+  finalConfig.appId && finalConfig.appId.trim() !== ''
+);
 
 if (hasConfig) {
   try {
-    app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+    app = getApps().length === 0 ? initializeApp(finalConfig) : getApp();
     
     // Initialize Firestore with multi-tab offline persistent local cache
     db = initializeFirestore(app, {
       localCache: persistentLocalCache({
         tabManager: persistentMultipleTabManager()
       })
-    }, firebaseConfig.firestoreDatabaseId);
+    }, finalConfig.firestoreDatabaseId);
     
     auth = getAuth(app);
 
@@ -118,6 +150,10 @@ if (hasConfig) {
     testConnection();
   } catch (error) {
     console.error("Failed to initialize Firebase Services with local cache:", error);
+    // Reset to null if initialization failed to prevent downstream crashes
+    app = null;
+    db = null;
+    auth = null;
   }
 } else {
   console.log("Firebase is not fully configured yet. Running in offline/localStorage decoupled mode.");
@@ -340,7 +376,8 @@ export const FirebaseService = {
   auditoria: createCollectionService<LogAuditoria>('auditoria'),
   pontos: createCollectionService<RegistroPonto>('registro_ponto'),
   emprestimos: createCollectionService<Emprestimo>('emprestimos'),
-  users: createCollectionService<AppUser>('users')
+  users: createCollectionService<AppUser>('users'),
+  settings: createCollectionService<any>('settings')
 };
 
 export default FirebaseService;
