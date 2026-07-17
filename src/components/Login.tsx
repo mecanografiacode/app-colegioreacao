@@ -24,11 +24,16 @@ export default function Login({ onLogin, users }: LoginProps) {
     });
   };
 
+  const [attempts, setAttempts] = useState(0);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    const user = users.find(u => u.email === email && u.password === password);
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPassword = password.trim();
+
+    const user = users.find(u => u.email.trim().toLowerCase() === cleanEmail && u.password === cleanPassword);
 
     if (user) {
       onLogin({
@@ -37,7 +42,13 @@ export default function Login({ onLogin, users }: LoginProps) {
         role: user.role
       });
     } else {
-      setError('E-mail ou senha incorretos. Tente novamente.');
+      setAttempts(prev => prev + 1);
+      const emailExists = users.some(u => u.email.trim().toLowerCase() === cleanEmail);
+      if (!emailExists) {
+        setError(`E-mail não encontrado. O sistema possui ${users.length} usuários cadastrados.`);
+      } else {
+        setError('Senha incorreta para este e-mail. Tente novamente.');
+      }
     }
   };
 
@@ -68,9 +79,19 @@ export default function Login({ onLogin, users }: LoginProps) {
 
           <form onSubmit={handleSubmit} className="space-y-5">
             {error && (
-              <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-lg flex items-center gap-2 text-sm">
-                <AlertCircle size={16} />
-                {error}
+              <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-lg flex flex-col gap-2 text-sm">
+                <div className="flex items-center gap-2">
+                  <AlertCircle size={16} />
+                  {error}
+                </div>
+                {attempts >= 2 && (
+                  <div className="mt-2 pt-2 border-t border-red-500/20 text-[10px] text-gray-400">
+                    <p className="font-bold mb-1 uppercase tracking-wider">Dica de Acesso:</p>
+                    <p>Se este é seu primeiro acesso nesta URL:</p>
+                    <p>E-mail: <span className="text-white">mecanografia@colegioreacaodf.com</span></p>
+                    <p>Senha: <span className="text-white">admin</span></p>
+                  </div>
+                )}
               </div>
             )}
 

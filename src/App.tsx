@@ -134,11 +134,29 @@ export default function App() {
     setLogsFuncionarios(cachedLogsFuncionarios);
     setEmprestimos(cachedEmprestimos);
 
-    // Asynchronously verify against IndexedDB to recover if localStorage was cleared
-    const checkIndexedDBRecovery = async () => {
+    // Asynchronously verify against IndexedDB or Firestore to recover/sync
+    const syncDataWithRemote = async () => {
       const dbPrefix = 'colegio_reacao_';
       try {
-        async function recoverCollection<T>(key: string, currentLocal: T[], setter: (data: T[]) => void) {
+        const isFirebaseActive = FirebaseService.isConfigured();
+
+        async function syncCollection<T>(key: string, currentLocal: T[], setter: (data: T[]) => void) {
+          // If Firebase is active, prioritize remote data
+          if (isFirebaseActive) {
+            try {
+              const remoteData = await (FirebaseService as any)[key].list();
+              if (remoteData && remoteData.length > 0) {
+                setter(remoteData);
+                localStorage.setItem(dbPrefix + key, JSON.stringify(remoteData));
+                console.log(`[Remote Sync] Loaded ${key} from Firestore successfully.`);
+                return;
+              }
+            } catch (err) {
+              console.warn(`[Remote Sync] Failed to load ${key} from Firestore:`, err);
+            }
+          }
+
+          // Fallback to IndexedDB recovery if local is empty
           if (currentLocal.length === 0) {
             const dbData = await IndexedDBService.getItem<T[]>(dbPrefix + key);
             if (dbData && dbData.length > 0) {
@@ -149,20 +167,20 @@ export default function App() {
           }
         }
 
-        await recoverCollection('users', cachedUsers, setUsers);
-        await recoverCollection('ordens', cachedOrdens, setOrdens);
-        await recoverCollection('equipamentos', cachedEquipamentos, setEquipamentos);
-        await recoverCollection('suporte', cachedChamados, setChamados);
-        await recoverCollection('funcionarios', cachedFuncionarios, setFuncionarios);
-        await recoverCollection('auditoria', cachedLogs, setLogs);
-        await recoverCollection('auditoria_funcionarios', cachedLogsFuncionarios, setLogsFuncionarios);
-        await recoverCollection('emprestimos', cachedEmprestimos, setEmprestimos);
+        await syncCollection('users', cachedUsers, setUsers);
+        await syncCollection('ordens', cachedOrdens, setOrdens);
+        await syncCollection('equipamentos', cachedEquipamentos, setEquipamentos);
+        await syncCollection('suporte', cachedChamados, setChamados);
+        await syncCollection('funcionarios', cachedFuncionarios, setFuncionarios);
+        await syncCollection('auditoria', cachedLogs, setLogs);
+        await syncCollection('auditoria_funcionarios', cachedLogsFuncionarios, setLogsFuncionarios);
+        await syncCollection('emprestimos', cachedEmprestimos, setEmprestimos);
       } catch (e) {
-        console.warn('[Offline Resilience] Error checking IndexedDB backup:', e);
+        console.warn('[Data Sync] Error during remote/local synchronization:', e);
       }
     };
 
-    checkIndexedDBRecovery();
+    syncDataWithRemote();
 
     // Restore Session
     const savedSession = localStorage.getItem('active_session');
